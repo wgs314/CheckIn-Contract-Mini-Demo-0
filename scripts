@@ -1,0 +1,19 @@
+const hre = require("hardhat");
+
+async function main() {
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("Deploying with account:", deployer.address);
+
+  const CheckIn = await hre.ethers.getContractFactory("CheckIn");
+  const checkIn = await CheckIn.deploy();
+
+  await checkIn.waitForDeployment();
+
+  const addr = await checkIn.getAddress();
+  console.log("CheckIn deployed to:", addr);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
