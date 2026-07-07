@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>打卡合约 - Mini Demo 0</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f6f8; color: #1a1a2e; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .app { width: 100%; max-width: 480px; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; }
+  .card-header { padding: 20px 24px 0; display: flex; align-items: center; gap: 10px; }
+  .card-header h1 { font-size: 18px; font-weight: 600; }
+  .card-body { padding: 20px 24px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; background: #eef0f5; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #555; }
+  .acct-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+  .acct-addr { font-family: "SF Mono", "Cascadia Code", monospace; font-size: 13px; background: #f0f1f5; padding: 6px 10px; border-radius: 6px; color: #555; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .stat-item { background: #f8f9fc; border-radius: 10px; padding: 16px; text-align: center; }
+  .stat-value { font-size: 32px; font-weight: 700; line-height: 1.2; }
+  .stat-value.checked { color: #22c55e; }
+  .stat-value.missed { color: #94a3b8; }
+  .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+  .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background .15s, opacity .15s; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #2563eb; }
+  .btn-primary:active:not(:disabled) { background: #1d4ed8; }
+  .btn-success { background: #22c55e; color: #fff; }
+  .btn-success:hover:not(:disabled) { background: #16a34a; }
+  .btn-connect { background: #1a1a2e; color: #fff; }
+  .btn-connect:hover:not(:disabled) { background: #16213e; }
+  .status-bar { margin-top: 16px; padding: 12px 16px; border-radius: 8px; font-size: 13px; line-height: 1.5; min-height: 44px; }
+  .status-bar.info { background: #eef2ff; color: #4338ca; }
+  .status-bar.success { background: #f0fdf4; color: #15803d; }
+  .status-bar.error { background: #fef2f2; color: #b91c1c; }
+  .status-bar.pending { background: #fffbeb; color: #b45309; }
+  .hidden { display: none; }
+  .event-log { margin-top: 12px; max-height: 140px; overflow-y: auto; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+  .event-log-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #999; margin-bottom: 6px; }
+  .event-entry { font-size: 12px; padding: 4px 0; color: #555; border-bottom: 1px solid #f0f0f0; font-family: "SF Mono", "Cascadia Code", monospace; }
+  .event-entry:last-child { border-bottom: none; }
+  .event-time { color: #aaa; }
+  #loading { display: flex; align-items: center; justify-content: center; padding: 32px; color: #888; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .net-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #e5e7eb; color: #555; }
+  .net-badge.ok { background: #dcfce7; color: #166534; }
+  .footer { text-align: center; margin-top: 12px; font-size: 11px; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="card">
+    <div class="card-header">
+      <h1>📋 打卡器</h1>
+      <span class="badge" id="netBadge">未连接</span>
+    </div>
+    <div class="card-body">
+      <div id="loading"><div class="spinner"></div><span>加载中...</span></div>
+
+      <div id="appContent" class="hidden">
+        <!-- 账号行 -->
+        <div class="acct-row">
+          <span class="acct-addr" id="accountDisplay">—</span>
+          <button class="btn-connect" id="connectBtn" style="width:auto;padding:6px 16px;font-size:13px;font-weight:500;">连接钱包</button>
+        </div>
+
+        <!-- 指标 -->
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="todayStatus">—</div>
+            <div class="stat-label">今日打卡</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="totalCount">0</div>
+            <div class="stat-label">累计打卡</div>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <button class="btn btn-primary" id="checkInBtn">✅ 今日打卡</button>
+
+        <!-- 状态提示 -->
+        <div class="status-bar info hidden" id="statusBar"></div>
+
+        <!-- 事件日志 -->
+        <div class="event-log hidden" id="eventLog">
+          <div class="event-log-title">链上事件</div>
+          <div id="eventList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">CheckIn Contract · Mini Demo 0</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js">
+</script>
+<script>
+const CONTRACT_ADDR = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // ← 部署后替换为实际地址
+
+const ABI = [
+  "function checkIn() external",
+  "function getCheckInCount(address) external view returns (uint256)",
+  "function hasCheckedInToday(address) external view returns (bool)",
+  "event CheckInSuccess(address indexed user, uint256 timestamp, uint256 total)"
+];
+
+const STATUS_KEY = "checkin_deployed";
+
+let provider, signer, contract;
+let currentAccount = null;
+
+const $ = id => document.getElementById(id);
+const loading = $("loading");
+const appContent = $("appContent");
+const accountDisplay = $("accountDisplay");
+const connectBtn = $("connectBtn");
+const todayStatus = $("todayStatus");
+const totalCount = $("totalCount");
+const checkInBtn = $("checkInBtn");
+const statusBar = $("statusBar");
+const eventLog = $("eventLog");
+const eventList = $("eventList");
+const netBadge = $("netBadge");
+
+// ── 工具 ──
+function shortAddr(addr) { return addr.slice(0,6) + "..." + addr.slice(-4); }
+
+function showStatus(msg, type="info") {
+  statusBar.className = "status-bar " + type;
+  statusBar.textContent = msg;
+  statusBar.classList.remove("hidden");
+}
+
+function clearStatus() { statusBar.classList.add("hidden"); }
+
+function updateNetBadge(net) {
+  const names = { "0x1":"Ethereum Mainnet","0x5":"Goerli","0xaa36a7":"Sepolia","0x2a":"Optimism","0xa":"Optimism","0x89":"Polygon","0x13881":"Mumbai","0x7a69":"Hardhat Local" };
+  netBadge.textContent = names[net] || ("Chain " + net);
+  netBadge.className = "badge" + (net === "0x7a69" ? " ok" : "");
+}
+
+function addEventEntry(user, ts, total) {
+  const d = new Date(Number(ts) * 1000);
+  const time = d.toLocaleTimeString("zh-CN", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  const entry = document.createElement("div");
+  entry.className = "event-entry";
+  entry.innerHTML = `<span class="event-time">${time}</span> ✅ #${total} — ${shortAddr(user)}`;
+  eventList.prepend(entry);
+  eventLog.classList.remove("hidden");
+}
+
+// ── 初始化／连接 ──
+async function initContract() {
+  if (!window.ethereum) { showStatus("请安装 MetaMask 浏览器扩展", "error"); return false; }
+  provider = new ethers.BrowserProvider(window.ethereum);
+  const network = await provider.getNetwork();
+  updateNetBadge(network.chainId.toString(16));
+  contract = new ethers.Contract(CONTRACT_ADDR, ABI, provider);
+  return true;
+}
+
+async function connectWallet() {
+  if (!window.ethereum) { showStatus("请安装 MetaMask", "error"); return; }
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    if (!accounts.length) return;
+    currentAccount = accounts[0];
+    signer = await provider.getSigner();
+    contract = new ethers.Contract(CONTRACT_ADDR, ABI, signer);
+    accountDisplay.textContent = currentAccount;
+    connectBtn.textContent = "已连接";
+    connectBtn.disabled = true;
+    clearStatus();
+    await refreshUI();
+    listenEvents();
+  } catch (e) {
+    showStatus("连接失败: " + e.message, "error");
+  }
+}
+
+window.ethereum?.on("accountsChanged", async (accts) => {
+  if (accts.length === 0) {
+    currentAccount = null; connectBtn.disabled = false; connectBtn.textContent = "连接钱包";
+    accountDisplay.textContent = "—"; todayStatus.textContent = "—"; totalCount.textContent = "0";
+    showStatus("钱包已断开", "info"); return;
+  }
+  currentAccount = accts[0];
+  accountDisplay.textContent = currentAccount;
+  signer = await provider.getSigner();
+  contract = new ethers.Contract(CONTRACT_ADDR, ABI, signer);
+  await refreshUI();
+});
+
+window.ethereum?.on("chainChanged", () => window.location.reload());
+
+// ── UI 刷新 ──
+async function refreshUI() {
+  if (!contract || !currentAccount) return;
+  try {
+    showStatus("读取链上数据...", "info");
+    const [hasChecked, count] = await Promise.all([
+      contract.hasCheckedInToday(currentAccount),
+      contract.getCheckInCount(currentAccount)
+    ]);
+    todayStatus.textContent = hasChecked ? "✅ 已打卡" : "⏳ 未打卡";
+    todayStatus.className = "stat-value" + (hasChecked ? " checked" : " missed");
+    totalCount.textContent = count.toString();
+    checkInBtn.disabled = hasChecked;
+    checkInBtn.textContent = hasChecked ? "✅ 今日已打卡" : "✅ 今日打卡";
+    checkInBtn.className = "btn " + (hasChecked ? "btn-success" : "btn-primary");
+    clearStatus();
+  } catch (e) {
+    showStatus("读取数据失败: " + e.message, "error");
+  }
+}
+
+// ── 打卡 ──
+checkInBtn.addEventListener("click", async () => {
+  if (!signer) { showStatus("请先连接钱包", "error"); return; }
+  try {
+    checkInBtn.disabled = true;
+    showStatus("⏳ 交易发送中，请在 MetaMask 中确认...", "pending");
+    const tx = await contract.checkIn();
+    showStatus(`⏳ 交易已提交 (${shortAddr(tx.hash)})，等待确认...`, "pending");
+    const receipt = await tx.wait();
+    showStatus(`✅ 打卡成功！区块 #${receipt.blockNumber}`, "success");
+    await refreshUI();
+  } catch (e) {
+    showStatus("打卡失败: " + (e.reason || e.message || e), "error");
+    checkInBtn.disabled = false;
+  }
+});
+
+// ── 事件监听 ──
+function listenEvents() {
+  contract.on("CheckInSuccess", (user, timestamp, total) => {
+    if (user.toLowerCase() === currentAccount?.toLowerCase()) {
+      addEventEntry(user, timestamp, total);
+    }
+  });
+}
+
+// ── 入口 ──
+connectBtn.addEventListener("click", connectWallet);
+
+(async () => {
+  const ok = await initContract();
+  if (!ok) { loading.textContent = "❌ 请安装 MetaMask"; return; }
+  loading.classList.add("hidden");
+  appContent.classList.remove("hidden");
+  if (currentAccount) await refreshUI();
+})();
+</script>
+</body>
+</html>
