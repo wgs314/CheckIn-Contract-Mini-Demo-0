@@ -9,7 +9,7 @@ An on-chain check-in DApp built with Solidity, Hardhat, and ethers.js — demons
 
 ![CheckIn Contract Screenshot](/outputs/CheckIn-Contract.png)
 
-合约代码托管页面（Catppuccin 配色风格）
+合约代码托管页面
 
 ## 技术栈
 
